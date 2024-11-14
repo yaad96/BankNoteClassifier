@@ -1,5 +1,5 @@
 import streamlit as st
-from PIL import Image
+from PIL import Image, ImageOps, ExifTags
 import torch
 import torchvision.models as models
 import torchvision.transforms as transforms
@@ -30,17 +30,56 @@ class_names = {
 st.title("Welcome to Banknote Denomination Classifier")
 st.write("Upload an image of a banknote to identify its denomination.")
 
+# Initialize session state for the image
+if "rotated_image" not in st.session_state:
+    st.session_state.rotated_image = None
+
 # File uploader
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    # Display the uploaded image
+    # Open the image
     image = Image.open(uploaded_file)
-    st.write("Step 1: Crop the uploaded image to focus on the banknote.")
-    cropped_image = st_cropper(image, aspect_ratio=(1, 1))
 
-    # Display the cropped image for user confirmation
-    st.write("Step 2: Confirm the cropped image.")
+    # Fix image orientation (EXIF metadata)
+    try:
+        for orientation in ExifTags.TAGS.keys():
+            if ExifTags.TAGS[orientation] == "Orientation":
+                break
+        exif = image._getexif()
+        if exif is not None and orientation in exif:
+            if exif[orientation] == 3:
+                image = image.rotate(180, expand=True)
+            elif exif[orientation] == 6:
+                image = image.rotate(270, expand=True)
+            elif exif[orientation] == 8:
+                image = image.rotate(90, expand=True)
+    except Exception as e:
+        pass  # If there's an issue with EXIF, proceed without adjustments
+
+    # Update the session state with the uploaded image if not rotated yet
+    if st.session_state.rotated_image is None:
+        st.session_state.rotated_image = image
+
+    st.image(st.session_state.rotated_image, caption="Uploaded Image", use_column_width=True)
+
+    # Rotate functionality
+    st.write("Step 1: Rotate the image if needed.")
+    if st.button("Make the Photo Landscape (Swap Width and Height)"):
+        st.session_state.rotated_image = st.session_state.rotated_image.transpose(Image.ROTATE_90)
+        st.image(st.session_state.rotated_image, caption="Image Rotated to Landscape", use_column_width=True)
+
+    # Cropping functionality
+    st.write("Step 2: Crop the image to focus on the banknote.")
+    cropped_image = st_cropper(
+        st.session_state.rotated_image,
+        aspect_ratio=(1, 1),
+        box_color="#00008B",  # Set the anchor color to blue
+        realtime_update=True  # Ensures updates as you move the crop box
+    )
+
+    # Display the cropped image
+    st.write("Step 3: Confirm the cropped image.")
     st.image(cropped_image, caption="Cropped Image", use_column_width=True)
 
     # Add a button for classification
