@@ -6,18 +6,18 @@ import torchvision.transforms as transforms
 
 
 
-# Define the InceptionV3 model architecture
-model = models.inception_v3(pretrained=False, aux_logits=False)  # InceptionV3 requires aux_logits=False for inference
+# Define the model architecture
+model = models.vgg16(pretrained=False)
 num_classes = 9  # Update to match the saved model's output classes
-model.fc = torch.nn.Linear(model.fc.in_features, num_classes)
+model.classifier[6] = torch.nn.Linear(4096, num_classes)
 
 # Load the model weights
-model.load_state_dict(torch.load("inception_v3_model_trained.pth", map_location=torch.device("cpu")))
+model.load_state_dict(torch.load("vgg16_model_trained.pth", map_location=torch.device("cpu")))
 model.eval()
 
 # Define image transformation pipeline
 transform = transforms.Compose([
-    transforms.Resize((299, 299)),  # Resize to match InceptionV3 input size
+    transforms.Resize((224, 224)),  # Resize to match model input size
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
@@ -29,7 +29,7 @@ class_names = {
 }
 
 # Streamlit UI setup
-st.title("Welcome to Banknote Denomination Classifier")
+st.title("Welcadasdome to Banknote Denomination Classifier")
 st.write("Upload an image of a banknote to identify its denomination.")
 
 # File uploader
