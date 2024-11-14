@@ -3,8 +3,7 @@ from PIL import Image
 import torch
 import torchvision.models as models
 import torchvision.transforms as transforms
-
-
+from streamlit_cropper import st_cropper
 
 # Define the InceptionV3 model architecture
 model = models.inception_v3(pretrained=False, aux_logits=False)  # InceptionV3 requires aux_logits=False for inference
@@ -23,7 +22,6 @@ transform = transforms.Compose([
 ])
 
 # Define class names for each denomination
-# Ensure you have 9 classes here to match the model's output
 class_names = {
     0: '1 Taka', 1: '10 Taka', 2: '100 Taka', 3: '1000 Taka', 4: '2 Taka', 5: '20 Taka', 6: '5 Taka', 7: '50 Taka', 8: '500 Taka'
 }
@@ -38,20 +36,25 @@ uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png
 if uploaded_file is not None:
     # Display the uploaded image
     image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Image", use_column_width=True)
+    st.write("Step 1: Crop the uploaded image to focus on the banknote.")
+    cropped_image = st_cropper(image, aspect_ratio=(1, 1))
 
-    # Preprocess the image
-    image = transform(image).unsqueeze(0)  # Add batch dimension
+    # Display the cropped image for user confirmation
+    st.write("Step 2: Confirm the cropped image.")
+    st.image(cropped_image, caption="Cropped Image", use_column_width=True)
 
-    # Add a loading spinner
-    with st.spinner("Classifying... Please wait."):
-        # Run the model
-        with torch.no_grad():
-            output = model(image)
-            _, predicted = torch.max(output, 1)
-            denomination = class_names[predicted.item()]
-            print("Predicted: ", predicted)
-            print("denomination: ", denomination)
+    # Add a button for classification
+    if st.button("Classify"):
+        # Preprocess the cropped image
+        image = transform(cropped_image).unsqueeze(0)  # Add batch dimension
 
-    # Display the prediction
-    st.success(f"Predicted Denomination: {denomination}")
+        # Add a loading spinner
+        with st.spinner("Classifying... Please wait."):
+            # Run the model
+            with torch.no_grad():
+                output = model(image)
+                _, predicted = torch.max(output, 1)
+                denomination = class_names[predicted.item()]
+
+        # Display the prediction
+        st.success(f"Predicted Denomination: {denomination}")
