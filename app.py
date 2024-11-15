@@ -1,11 +1,8 @@
-# Import required libraries
 import streamlit as st
-from PIL import Image, ImageOps, ExifTags
-import io
+from PIL import Image, ImageOps, ExifTags, ImageDraw
 import torch
 import torchvision.models as models
 import torchvision.transforms as transforms
-from streamlit_cropper import st_cropper
 
 # Define the InceptionV3 model architecture
 model = models.inception_v3(pretrained=False, aux_logits=False)  # InceptionV3 requires aux_logits=False for inference
@@ -29,38 +26,21 @@ class_names = {
 }
 
 # Streamlit UI setup
-st.title("Welcome to BD Banknote Denomination Classifier")
+st.title("Welcome to Banknote Denomination Classifier")
 st.write("Upload an image of a banknote to identify its denomination.")
 
+# Initialize session state for the image
+if "rotated_image" not in st.session_state:
+    st.session_state.rotated_image = None
+if "cropped_image" not in st.session_state:
+    st.session_state.cropped_image = None
 
-# Function to resize the image while maintaining aspect ratio
-def resize_image(image, base_size=1024):
-    max_dim = max(image.size)
-    scale_factor = base_size / max_dim
-    new_size = tuple([int(dim * scale_factor) for dim in image.size])
-    return image.resize(new_size, Image.Resampling.LANCZOS)  # Updated from ANTIALIAS to LANCZOS
-
-
-# If not classified, show file uploader
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png", "heic", "heif"])
+# File uploader
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
     # Open the image
-    try:
-        image = Image.open(uploaded_file)
-    except IOError:
-        st.error("Could not open the uploaded image. Please ensure it is in a supported format.")
-
-    # Convert to JPG/PNG format
-    output_format = "PNG"
-    buffer = io.BytesIO()
-    image = image.convert("RGB")  # Ensure compatibility for all formats
-    image.save(buffer, format=output_format)
-    buffer.seek(0)
-    image = Image.open(buffer)
-
-    # Resize the image to ensure it fits in the cropping window
-    image = resize_image(image, base_size=1024)
+    image = Image.open(uploaded_file)
 
     # Fix image orientation (EXIF metadata)
     try:
@@ -78,26 +58,49 @@ if uploaded_file is not None:
     except Exception as e:
         pass  # If there's an issue with EXIF, proceed without adjustments
 
-    # Display the resized and reoriented image
-    st.image(image, caption="Uploaded Image", use_column_width=True)
+    # Update the session state with the uploaded image if not rotated yet
+    if st.session_state.rotated_image is None:
+        st.session_state.rotated_image = image
 
-    # Cropping functionality
-    st.write("Step 1: Crop the image to focus on the banknote.")
-    cropped_image = st_cropper(
-        image,
-        aspect_ratio=(1, 1),
-        box_color="#00008B",  # Set the box and anchors to darkest blue
-        realtime_update=True  # Ensures updates as you move the crop box
-    )
+    # Display the initial uploaded image
+    st.image(st.session_state.rotated_image, caption="Uploaded Image", use_column_width=True)
 
-    # Display the cropped image
-    st.write("Step 2: Confirm the cropped image.")
-    st.image(cropped_image, caption="Cropped Image", use_column_width=True)
+    # Rotate functionality
+    st.write("Step 1: Rotate the image if needed.")
+    if st.button("Make the Photo Landscape (Swap Width and Height)"):
+        st.session_state.rotated_image = st.session_state.rotated_image.transpose(Image.ROTATE_90)
+        st.image(st.session_state.rotated_image, caption="Image Rotated to Landscape", use_column_width=True)
 
-    # Add a button for classification
+    # Manual cropping interface
+    st.write("Step 2: Crop the image manually.")
+    width, height = st.session_state.rotated_image.size
+
+    # Define sliders for cropping dimensions
+    left = st.slider("Select left boundary", 0, width, 0)
+    top = st.slider("Select top boundary", 0, height, 0)
+    right = st.slider("Select right boundary", left + 1, width, width)
+    bottom = st.slider("Select bottom boundary", top + 1, height, height)
+
+    # Create a preview of the crop rectangle on the original image
+    preview_image = st.session_state.rotated_image.copy()
+    draw = ImageDraw.Draw(preview_image)
+    draw.rectangle((left, top, right, bottom), outline="red", width=3)  # Red rectangle for crop preview
+
+    st.image(preview_image, caption="Crop Preview (Red Rectangle)", use_column_width=True)
+
+    # Perform cropping and store in session state
+    if st.button("Crop Image"):
+        st.session_state.cropped_image = st.session_state.rotated_image.crop((left, top, right, bottom))
+        st.success("Image cropped successfully!")
+
+# Display cropped image and classify
+if st.session_state.cropped_image:
+    st.write("Step 3: Confirm the cropped image.")
+    st.image(st.session_state.cropped_image, caption="Cropped Image", use_column_width=True)
+
     if st.button("Classify"):
         # Preprocess the cropped image
-        image = transform(cropped_image).unsqueeze(0)  # Add batch dimension
+        image = transform(st.session_state.cropped_image).unsqueeze(0)  # Add batch dimension
 
         # Add a loading spinner
         with st.spinner("Classifying... Please wait."):
