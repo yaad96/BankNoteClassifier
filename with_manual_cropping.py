@@ -1,9 +1,8 @@
 import streamlit as st
-from PIL import Image, ImageOps, ExifTags
+from PIL import Image, ImageOps, ExifTags, ImageDraw
 import torch
 import torchvision.models as models
 import torchvision.transforms as transforms
-from streamlit_cropper import st_cropper
 
 # Define the InceptionV3 model architecture
 model = models.inception_v3(pretrained=False, aux_logits=False)  # InceptionV3 requires aux_logits=False for inference
@@ -59,51 +58,55 @@ if uploaded_file is not None:
     except Exception as e:
         pass  # If there's an issue with EXIF, proceed without adjustments
 
-    # Get the height and width of the image
-    original_width, original_height = image.size
+    # Update the session state with the uploaded image if not rotated yet
+    if st.session_state.rotated_image is None:
+        st.session_state.rotated_image = image
 
-    # Resize the image to width=400 while maintaining aspect ratio
-    new_width = 400
-    aspect_ratio = original_height / original_width
-    new_height = int(new_width * aspect_ratio)
-    image = image.resize((new_width, new_height))
+    # Display the initial uploaded image
+    st.image(st.session_state.rotated_image, caption="Uploaded Image", use_column_width=True)
 
-    # Update the session state with the resized image
-    st.session_state.rotated_image = image
+    # Rotate functionality
+    st.write("Step 1: Rotate the image if needed.")
+    if st.button("Make the Photo Landscape (Swap Width and Height)"):
+        st.session_state.rotated_image = st.session_state.rotated_image.transpose(Image.ROTATE_90)
+        st.image(st.session_state.rotated_image, caption="Image Rotated to Landscape", use_column_width=True)
 
-    # Display the resized image
-    st.image(st.session_state.rotated_image, caption="Resized Image", use_column_width=True)
+    # Manual cropping interface
+    st.write("Step 2: Crop the image manually.")
+    width, height = st.session_state.rotated_image.size
 
-    # Perform cropping using Streamlit-Cropper
-    st.write("Step 1: Crop the image using the tool below.")
-    cropped_image = st_cropper(st.session_state.rotated_image, realtime_update=True, box_color="red", aspect_ratio=None)
+    # Define sliders for cropping dimensions
+    left = st.slider("Select left boundary", 0, width, 0)
+    top = st.slider("Select top boundary", 0, height, 0)
+    right = st.slider("Select right boundary", left + 1, width, width)
+    bottom = st.slider("Select bottom boundary", top + 1, height, height)
 
-    if st.button("Confirm Crop"):
-        st.session_state.cropped_image = cropped_image
+    # Create a preview of the crop rectangle on the original image
+    preview_image = st.session_state.rotated_image.copy()
+    draw = ImageDraw.Draw(preview_image)
+    draw.rectangle((left, top, right, bottom), outline="red", width=10)  # Red rectangle for crop preview
+
+    st.image(preview_image, caption="Crop Preview (Red Rectangle)", use_column_width=True)
+
+    # Perform cropping and store in session state
+    if st.button("Crop Image"):
+        st.session_state.cropped_image = st.session_state.rotated_image.crop((left, top, right, bottom))
         st.success("Image cropped successfully!")
 
-# Rotate cropped image if needed
+# Display cropped image and classify
 if st.session_state.cropped_image:
-    st.write("Step 2: Rotate the cropped image if needed.")
+    st.write("Step 3: Confirm the cropped image.")
     st.image(st.session_state.cropped_image, caption="Cropped Image", use_column_width=True)
 
-    if st.button("Make the Photo Landscape (Swap Width and Height)"):
-        st.session_state.cropped_image = st.session_state.cropped_image.transpose(Image.ROTATE_90)
-        st.image(st.session_state.cropped_image, caption="Image Rotated to Landscape", use_column_width=True)
-
-# Classify the image
-if st.session_state.cropped_image:
-    st.write("Step 3: Classify the image.")
-
     if st.button("Classify"):
-        # Preprocess the cropped (and potentially rotated) image for classification
-        final_image = transform(st.session_state.cropped_image).unsqueeze(0)  # Add batch dimension
+        # Preprocess the cropped image
+        image = transform(st.session_state.cropped_image).unsqueeze(0)  # Add batch dimension
 
         # Add a loading spinner
         with st.spinner("Classifying... Please wait."):
             # Run the model
             with torch.no_grad():
-                output = model(final_image)
+                output = model(image)
                 _, predicted = torch.max(output, 1)
                 denomination = class_names[predicted.item()]
 

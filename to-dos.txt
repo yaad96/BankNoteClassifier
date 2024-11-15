@@ -1,0 +1,7 @@
+1. Change the code so that, making the landscape er por arekta button thake
+"I'm good", oita press korle cropped imaged ta ashbe and shetar nicche classify button thakeb
+
+2. "lets classify again" button dile full web site reload hobe cache clear hobe
+
+3. Boro display size er jonno st.cropper ar choto display size er jonno manually
+adjustment 

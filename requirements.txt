@@ -1,6 +1,5 @@
 streamlit
 streamlit-cropper
-gdown
 torch
 torchvision
 pillow
