@@ -29,20 +29,20 @@ class_names = {
 }
 
 # Streamlit UI setup
-st.title("Welcome to Banknote Denomination Classifier")
+st.title("Welcome to BD Banknote Denomination Classifier")
 st.write("Upload an image of a banknote to identify its denomination.")
 
-# Initialize session state for the image
-if "rotated_image" not in st.session_state:
-    st.session_state.rotated_image = None
-if "classified" not in st.session_state:
-    st.session_state.classified = False
+
+# Function to resize the image while maintaining aspect ratio
+def resize_image(image, base_size=1024):
+    max_dim = max(image.size)
+    scale_factor = base_size / max_dim
+    new_size = tuple([int(dim * scale_factor) for dim in image.size])
+    return image.resize(new_size, Image.Resampling.LANCZOS)  # Updated from ANTIALIAS to LANCZOS
+
 
 # If not classified, show file uploader
-if not st.session_state.classified:
-    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png", "heic", "heif"])
-else:
-    uploaded_file = None
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png", "heic", "heif"])
 
 if uploaded_file is not None:
     # Open the image
@@ -52,12 +52,15 @@ if uploaded_file is not None:
         st.error("Could not open the uploaded image. Please ensure it is in a supported format.")
 
     # Convert to JPG/PNG format
-    output_format = "JPEG" if uploaded_file.type != "image/png" else "PNG"
+    output_format = "PNG"
     buffer = io.BytesIO()
     image = image.convert("RGB")  # Ensure compatibility for all formats
     image.save(buffer, format=output_format)
     buffer.seek(0)
     image = Image.open(buffer)
+
+    # Resize the image to ensure it fits in the cropping window
+    image = resize_image(image, base_size=1024)
 
     # Fix image orientation (EXIF metadata)
     try:
@@ -75,29 +78,20 @@ if uploaded_file is not None:
     except Exception as e:
         pass  # If there's an issue with EXIF, proceed without adjustments
 
-    # Update the session state with the uploaded image if not rotated yet
-    if st.session_state.rotated_image is None:
-        st.session_state.rotated_image = image
-
-    st.image(st.session_state.rotated_image, caption="Uploaded Image", use_column_width=True)
-
-    # Rotate functionality
-    st.write("Step 1: Rotate the image if needed.")
-    if st.button("Make the Photo Landscape (Swap Width and Height)"):
-        st.session_state.rotated_image = st.session_state.rotated_image.transpose(Image.ROTATE_90)
-        st.image(st.session_state.rotated_image, caption="Image Rotated to Landscape", use_column_width=True)
+    # Display the resized and reoriented image
+    st.image(image, caption="Uploaded Image", use_column_width=True)
 
     # Cropping functionality
-    st.write("Step 2: Crop the image to focus on the banknote.")
+    st.write("Step 1: Crop the image to focus on the banknote.")
     cropped_image = st_cropper(
-        st.session_state.rotated_image,
+        image,
         aspect_ratio=(1, 1),
         box_color="#00008B",  # Set the box and anchors to darkest blue
         realtime_update=True  # Ensures updates as you move the crop box
     )
 
     # Display the cropped image
-    st.write("Step 3: Confirm the cropped image.")
+    st.write("Step 2: Confirm the cropped image.")
     st.image(cropped_image, caption="Cropped Image", use_column_width=True)
 
     # Add a button for classification
@@ -115,11 +109,3 @@ if uploaded_file is not None:
 
         # Display the prediction
         st.success(f"Predicted Denomination: {denomination}")
-        st.session_state.classified = True
-
-# Show "Classify Another Note" button if classification is done
-if st.session_state.classified:
-    if st.button("Classify Another Note"):
-        st.session_state.rotated_image = None
-        st.session_state.classified = False
-        st.experimental_rerun()
