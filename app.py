@@ -84,7 +84,7 @@ if uploaded_file is not None:
     # Create a preview of the crop rectangle on the original image
     preview_image = st.session_state.rotated_image.copy()
     draw = ImageDraw.Draw(preview_image)
-    draw.rectangle((left, top, right, bottom), outline="red", width=3)  # Red rectangle for crop preview
+    draw.rectangle((left, top, right, bottom), outline="red", width=10)  # Red rectangle for crop preview
 
     st.image(preview_image, caption="Crop Preview (Red Rectangle)", use_column_width=True)
 
