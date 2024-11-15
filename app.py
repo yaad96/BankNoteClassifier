@@ -1,5 +1,7 @@
+# Import required libraries
 import streamlit as st
 from PIL import Image, ImageOps, ExifTags
+import io
 import torch
 import torchvision.models as models
 import torchvision.transforms as transforms
@@ -33,13 +35,29 @@ st.write("Upload an image of a banknote to identify its denomination.")
 # Initialize session state for the image
 if "rotated_image" not in st.session_state:
     st.session_state.rotated_image = None
+if "classified" not in st.session_state:
+    st.session_state.classified = False
 
-# File uploader
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+# If not classified, show file uploader
+if not st.session_state.classified:
+    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png", "heic", "heif"])
+else:
+    uploaded_file = None
 
 if uploaded_file is not None:
     # Open the image
-    image = Image.open(uploaded_file)
+    try:
+        image = Image.open(uploaded_file)
+    except IOError:
+        st.error("Could not open the uploaded image. Please ensure it is in a supported format.")
+
+    # Convert to JPG/PNG format
+    output_format = "JPEG" if uploaded_file.type != "image/png" else "PNG"
+    buffer = io.BytesIO()
+    image = image.convert("RGB")  # Ensure compatibility for all formats
+    image.save(buffer, format=output_format)
+    buffer.seek(0)
+    image = Image.open(buffer)
 
     # Fix image orientation (EXIF metadata)
     try:
@@ -74,7 +92,7 @@ if uploaded_file is not None:
     cropped_image = st_cropper(
         st.session_state.rotated_image,
         aspect_ratio=(1, 1),
-        box_color="#00008B",  # Set the anchor color to blue
+        box_color="#00008B",  # Set the box and anchors to darkest blue
         realtime_update=True  # Ensures updates as you move the crop box
     )
 
@@ -97,3 +115,11 @@ if uploaded_file is not None:
 
         # Display the prediction
         st.success(f"Predicted Denomination: {denomination}")
+        st.session_state.classified = True
+
+# Show "Classify Another Note" button if classification is done
+if st.session_state.classified:
+    if st.button("Classify Another Note"):
+        st.session_state.rotated_image = None
+        st.session_state.classified = False
+        st.experimental_rerun()
