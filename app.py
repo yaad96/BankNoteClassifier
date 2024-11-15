@@ -1,9 +1,13 @@
 import streamlit as st
-from PIL import Image, ImageOps, ExifTags
+from PIL import Image, ExifTags
 import torch
 import torchvision.models as models
 import torchvision.transforms as transforms
 from streamlit_cropper import st_cropper
+
+
+
+
 
 # Define the InceptionV3 model architecture
 model = models.inception_v3(pretrained=False, aux_logits=False)  # InceptionV3 requires aux_logits=False for inference
@@ -27,8 +31,10 @@ class_names = {
 }
 
 # Streamlit UI setup
-st.title("Welcome to Banknote Denomination Classifier")
+st.title("Bangladeshi Banknote Denomination Classifier")
 st.write("Upload an image of a banknote to identify its denomination.")
+
+
 
 # Initialize session state for the image
 if "rotated_image" not in st.session_state:
@@ -37,11 +43,15 @@ if "cropped_image" not in st.session_state:
     st.session_state.cropped_image = None
 
 # File uploader
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("Choose an image...")
 
 if uploaded_file is not None:
     # Open the image
     image = Image.open(uploaded_file)
+
+    # Ensure the image is in RGB format
+    if image.mode != "RGB":
+        image = image.convert("RGB")
 
     # Fix image orientation (EXIF metadata)
     try:
@@ -78,24 +88,24 @@ if uploaded_file is not None:
     st.write("Step 1: Crop the image using the tool below.")
     cropped_image = st_cropper(st.session_state.rotated_image, realtime_update=True, box_color="red", aspect_ratio=None)
 
-    if st.button("Confirm Crop"):
+    if st.button("Confirm Crop", key="crop_button"):
         st.session_state.cropped_image = cropped_image
         st.success("Image cropped successfully!")
 
 # Rotate cropped image if needed
 if st.session_state.cropped_image:
-    st.write("Step 2: Rotate the cropped image if needed.")
+    st.write("Step 2: Rotate the cropped image if needed to make the note horizontal.")
     st.image(st.session_state.cropped_image, caption="Cropped Image", use_column_width=True)
 
-    if st.button("Make the Photo Landscape (Swap Width and Height)"):
+    if st.button("Make the note horizontal", key="rotate_button"):
         st.session_state.cropped_image = st.session_state.cropped_image.transpose(Image.ROTATE_90)
-        st.image(st.session_state.cropped_image, caption="Image Rotated to Landscape", use_column_width=True)
+        st.image(st.session_state.cropped_image, caption="Note Rotated", use_column_width=True)
 
 # Classify the image
 if st.session_state.cropped_image:
     st.write("Step 3: Classify the image.")
 
-    if st.button("Classify"):
+    if st.button("Classify", key="classify_button"):
         # Preprocess the cropped (and potentially rotated) image for classification
         final_image = transform(st.session_state.cropped_image).unsqueeze(0)  # Add batch dimension
 
@@ -109,3 +119,10 @@ if st.session_state.cropped_image:
 
         # Display the prediction
         st.success(f"Predicted Denomination: {denomination}")
+
+        # Add a "Classify another note" button with a unique key
+        if st.button("Classify Another Note", key="classify_another_button"):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+
+            st.warning("Please upload a new image to start fresh.")
