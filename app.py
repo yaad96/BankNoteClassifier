@@ -5,8 +5,7 @@ import torchvision.models as models
 import torchvision.transforms as transforms
 from streamlit_cropper import st_cropper
 
-
-
+st.set_page_config(layout="wide")
 
 
 # Define the InceptionV3 model architecture
